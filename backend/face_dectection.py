@@ -18,7 +18,7 @@ if not os.path.exists(USR_PATH):
     os.makedirs(USR_PATH)
 
 # MTCNN init
-mtcnn = MTCNN(margin=20, keep_all=False, post_process=False, device=device)
+mtcnn = MTCNN(margin=20,thresholds= [0.7, 0.7, 0.8], keep_all=False, post_process=False, device=device)
 
 # Camera init
 cap = cv2.VideoCapture(0)
