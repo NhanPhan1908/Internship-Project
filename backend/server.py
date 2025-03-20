@@ -2,7 +2,7 @@ import socket
 import json
 from face_verification import process_image
 
-
+# Init server
 HOST = "0.0.0.0"
 PORT = 5050
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
