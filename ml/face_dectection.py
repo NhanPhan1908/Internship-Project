@@ -38,7 +38,7 @@ while cap.isOpened() and count:
     # check exist of face
     faces = mtcnn(frame)
     if faces is not None and leap % 2: 
-        # create namefile as realtime Ex:2025-3-18-10-24-23
+        # create namefile as realtime Ex:2025-3-18_10-24-23
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         path = os.path.join(USR_PATH, f"{timestamp}_{count}.jpg")
 
