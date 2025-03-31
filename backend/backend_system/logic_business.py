@@ -59,3 +59,4 @@ async def face_attendance(employee_id: str, face_embedding, db: AsyncIOMotorData
             )
 
     return {"status": 1, "message": "✅ Điểm danh thành công!"}
+
