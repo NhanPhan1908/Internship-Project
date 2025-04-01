@@ -65,7 +65,7 @@ def save_attendance(name, confidence):
             "timestamp": timestamp,
             "late_minutes": late_minutes
         })
-        print(f"✅ Check-in: {name} - Đi muộn {late_minutes} phút")
+        print(f"✅ Check-in: {name} - Thời gian đến {timestamp} Đi muộn {late_minutes} phút")
 
     elif hour >= CHECKOUT_HOUR:  # Check-out (Sau 17:00)
         collection_checkout.insert_one({
@@ -73,7 +73,7 @@ def save_attendance(name, confidence):
             "confidence": confidence,
             "timestamp": timestamp
         })
-        print(f"✅ Check-out: {name}")
+        print(f"✅ Check-out: {name} - Thời gian về {timestamp}")
 
     else:  # Không thể chấm công ngoài thời gian quy định
         print(f"🚫 {name} không thể chấm công vào thời gian này ({timestamp})")
