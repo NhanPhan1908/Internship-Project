@@ -9,7 +9,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Employee Management System")
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 2500, 2600)
 
         self.tabs = QTabWidget(self)
         self.setCentralWidget(self.tabs)

@@ -1,76 +1,136 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton
+import sys
 import cv2
-import torch
-import numpy as np
-from facenet_pytorch import InceptionResnetV1, MTCNN
-import pymongo
-from torchvision import transforms
+import requests
+import json
+from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, QTabWidget
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QPixmap, QImage
 
-# Kết nối MongoDB
-client = pymongo.MongoClient("mongodb://localhost:27017/")
-db = client["attendance_system"]
-employees_collection = db["employees"]
-
-# Model nhận diện
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-mtcnn = MTCNN(keep_all=False, device=device)
-facenet = InceptionResnetV1(pretrained="casia-webface").eval().to(device)
-
-def trans(img):
-    return transforms.Compose([
-        transforms.ToTensor(),
-        lambda x: (x - 127.5) / 128.0
-    ])(img)
+BACKEND_URL = "http://127.0.0.1:8000/recognize/" 
 
 class FaceRecognitionTab(QWidget):
     def __init__(self):
         super().__init__()
-        layout = QVBoxLayout()
+        self.initUI()
+        self.capture = None
+        self.timer = None
+    
+    def initUI(self):
+        self.camera_viewfinder = QLabel("Camera Feed")
+        self.camera_viewfinder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.camera_viewfinder.setFixedSize(480, 360)
 
-        self.image_label = QLabel("Camera Feed")
-        layout.addWidget(self.image_label)
+        self.recognition_label = QLabel("Recognition Result")
+        self.recognition_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.recognition_label.setFixedSize(480, 360)
 
-        self.capture_button = QPushButton("Capture Face")
-        self.capture_button.clicked.connect(self.capture_face)
-        layout.addWidget(self.capture_button)
+        camera_layout = QHBoxLayout()
+        camera_layout.addWidget(self.camera_viewfinder)
+        camera_layout.addWidget(self.recognition_label)
 
-        self.result_label = QLabel("")
-        layout.addWidget(self.result_label)
+        self.start_camera_button = QPushButton("Start Camera")
+        self.start_camera_button.clicked.connect(self.start_camera)
+        self.capture_button = QPushButton("Capture & Recognize")
+        self.capture_button.clicked.connect(self.capture_and_recognize_face)
+        self.capture_button.setEnabled(False)
 
-        self.setLayout(layout)
+        button_layout = QVBoxLayout()
+        button_layout.addWidget(self.start_camera_button)
+        button_layout.addWidget(self.capture_button)
+        button_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-    def capture_face(self):
-        cap = cv2.VideoCapture(0)
-        ret, frame = cap.read()
-        cap.release()
+        self.log_output = QTextEdit()
+        self.log_output.setReadOnly(True)
+        self.log_output.setFixedHeight(120)
 
-        if not ret:
-            self.result_label.setText("❌ Camera error!")
+        main_layout = QVBoxLayout()
+        top_layout = QHBoxLayout()
+        top_layout.addLayout(camera_layout, 4)
+        top_layout.addLayout(button_layout, 1)
+
+        main_layout.addLayout(top_layout)
+        main_layout.addWidget(self.log_output)
+
+        self.setLayout(main_layout)
+
+    def start_camera(self):
+        if self.capture is not None:
+            self.log_output.append("⚠️ Camera đã được bật rồi!")
             return
 
-        face = mtcnn(frame)
-        if face is None:
-            self.result_label.setText("🚫 No face detected!")
+        self.capture = cv2.VideoCapture(0)
+        
+        if not self.capture.isOpened():
+            self.log_output.append("❌ Không thể mở camera. Vui lòng kiểm tra kết nối.")
+            self.capture = None
+            return
+        
+        self.log_output.append("📷 Camera đã mở thành công.")
+        self.capture_button.setEnabled(True)
+
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_frame)
+        self.timer.start(30)
+
+    def update_frame(self):
+        if self.capture is None:
             return
 
-        employees = list(employees_collection.find({}))
-        if not employees:
-            self.result_label.setText("🚫 No employees found!")
-            return
-
-        with torch.no_grad():
-            embedding = facenet(trans(face).unsqueeze(0).to(device)).cpu().numpy()
-
-        best_match = None
-        best_similarity = 0.0
-        for emp in employees:
-            stored_embedding = np.array(emp["embedding"])
-            similarity = np.dot(embedding, stored_embedding.T)
-            if similarity > best_similarity:
-                best_similarity = similarity
-                best_match = emp
-
-        if best_similarity > 0.5:
-            self.result_label.setText(f"✅ Employee: {best_match['name']} (ID: {best_match['employee_id']})")
+        ret, frame = self.capture.read()
+        if ret:
+            self.display_image(frame, self.camera_viewfinder)
         else:
-            self.result_label.setText("🚫 Employee not found!")
+            self.log_output.append("❌ Lỗi khi đọc dữ liệu từ camera.")
+
+    def capture_and_recognize_face(self):
+        self.log_output.append("🔄 Đang gửi ảnh đến backend...")
+
+        if self.capture is None:
+            self.log_output.append("❌ Camera chưa được mở.")
+            return
+
+        ret, frame = self.capture.read()
+        if not ret:
+            self.log_output.append("❌ Không thể chụp ảnh từ camera.")
+            return
+
+        _, img_encoded = cv2.imencode(".jpg", frame)
+        files = {"file": ("face.jpg", img_encoded.tobytes(), "image/jpeg")}
+
+        try:
+            response = requests.post(BACKEND_URL, files=files)
+            if response.status_code == 200:
+                result = response.json()
+                self.log_output.append(f"✅ {result['message']}")
+            else:
+                self.log_output.append(f"❌ Lỗi từ server: {response.status_code}")
+        except Exception as e:
+            self.log_output.append(f"❌ Lỗi kết nối: {str(e)}")
+    
+    def display_image(self, img, label):
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        height, width, channel = img_rgb.shape
+        bytes_per_line = 3 * width
+        qt_img = QPixmap.fromImage(QImage(img_rgb.data, width, height, bytes_per_line, QImage.Format.Format_RGB888))
+        label.setPixmap(qt_img.scaled(label.width(), label.height(), Qt.AspectRatioMode.KeepAspectRatio))
+
+    def closeEvent(self, event):
+        if self.capture:
+            self.capture.release()
+
+class MainApp(QTabWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Face Recognition System")
+        self.setGeometry(100, 100, 1400, 800)
+        self.initUI()
+    
+    def initUI(self):
+        self.face_recognition_tab = FaceRecognitionTab()
+        self.addTab(self.face_recognition_tab, "Face Recognition")
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    main_app = MainApp()
+    main_app.show()
+    sys.exit(app.exec())
