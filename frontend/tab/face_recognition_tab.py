@@ -1,7 +1,6 @@
 import sys
 import cv2
 import requests
-import json
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, QTabWidget
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPixmap, QImage
@@ -17,12 +16,14 @@ class FaceRecognitionTab(QWidget):
     
     def initUI(self):
         self.camera_viewfinder = QLabel("Camera Feed")
-        self.camera_viewfinder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.camera_viewfinder.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.camera_viewfinder.setFixedSize(480, 360)
+        self.camera_viewfinder.setStyleSheet("border: 1px solid black")
 
         self.recognition_label = QLabel("Recognition Result")
-        self.recognition_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.recognition_label.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.recognition_label.setFixedSize(480, 360)
+        self.recognition_label.setStyleSheet("border: 1px solid black")
 
         camera_layout = QHBoxLayout()
         camera_layout.addWidget(self.camera_viewfinder)
