@@ -1,7 +1,7 @@
 import sys
 import cv2
 import requests
-from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, QTabWidget
+from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, QGroupBox, QTabWidget
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPixmap, QImage
 
@@ -15,42 +15,88 @@ class FaceRecognitionTab(QWidget):
         self.timer = None
     
     def initUI(self):
+        self.setWindowTitle("Nhận diện khuôn mặt")
+        self.setGeometry(100, 100, 900, 600)
+
+        # Camera Viewfinder Group
+        camera_group = QGroupBox("Camera Feed")
         self.camera_viewfinder = QLabel("Camera Feed")
-        self.camera_viewfinder.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.camera_viewfinder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.camera_viewfinder.setFixedSize(480, 360)
-        self.camera_viewfinder.setStyleSheet("border: 1px solid black")
+        self.camera_viewfinder.setStyleSheet("border: 1px solid black; background-color: lightgray")
 
+        # Recognition Result Group
+        recognition_group = QGroupBox("Kết quả nhận diện")
         self.recognition_label = QLabel("Recognition Result")
-        self.recognition_label.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.recognition_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.recognition_label.setFixedSize(480, 360)
-        self.recognition_label.setStyleSheet("border: 1px solid black")
+        self.recognition_label.setStyleSheet("border: 1px solid black; background-color: lightgray")
 
-        camera_layout = QHBoxLayout()
-        camera_layout.addWidget(self.camera_viewfinder)
-        camera_layout.addWidget(self.recognition_label)
+        # Detect Result Group
+        detect_group = QGroupBox("Detect Result")
+        self.detect_label = QLabel("Detect Result")
+        self.detect_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.detect_label.setFixedSize(480, 360)
+        self.detect_label.setStyleSheet("border: 1px solid black; background-color: lightgray")
 
-        self.start_camera_button = QPushButton("Start Camera")
+        # Employee Data Group
+        employee_group = QGroupBox("Employee Data")
+        self.employee_data_label = QLabel("Employee Data")
+        self.employee_data_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.employee_data_label.setFixedSize(480, 360)
+        self.employee_data_label.setStyleSheet("border: 1px solid black; background-color: lightgray")
+
+        # Layout cho Camera Feed, Recognition, Detect và Employee Data (2x2)
+        grid_layout = QVBoxLayout()
+        
+        top_row_layout = QHBoxLayout()
+        top_row_layout.addWidget(camera_group)
+        top_row_layout.addWidget(recognition_group)
+
+        bottom_row_layout = QHBoxLayout()
+        bottom_row_layout.addWidget(detect_group)
+        bottom_row_layout.addWidget(employee_group)
+
+        grid_layout.addLayout(top_row_layout)
+        grid_layout.addLayout(bottom_row_layout)
+
+        # Button Group (Chức năng)
+        button_group = QGroupBox("Chức năng")
+        self.start_camera_button = QPushButton("Bật Camera")
         self.start_camera_button.clicked.connect(self.start_camera)
-        self.capture_button = QPushButton("Capture & Recognize")
+        self.capture_button = QPushButton("Chụp & Nhận diện")
         self.capture_button.clicked.connect(self.capture_and_recognize_face)
         self.capture_button.setEnabled(False)
 
         button_layout = QVBoxLayout()
         button_layout.addWidget(self.start_camera_button)
         button_layout.addWidget(self.capture_button)
-        button_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        button_group.setLayout(button_layout)
 
+        # Log Output Group
+        log_group = QGroupBox("Phản hồi hệ thống")
         self.log_output = QTextEdit()
         self.log_output.setReadOnly(True)
         self.log_output.setFixedHeight(120)
+        log_layout = QVBoxLayout()
+        log_layout.addWidget(self.log_output)
+        log_group.setLayout(log_layout)
 
-        main_layout = QVBoxLayout()
-        top_layout = QHBoxLayout()
-        top_layout.addLayout(camera_layout, 4)
-        top_layout.addLayout(button_layout, 1)
+        # Layout Tổng
+        main_layout = QHBoxLayout()
+        
+        # Phần camera và nhận diện chiếm 2/3 diện tích
+        main_layout.addLayout(grid_layout, 3)
+        
+        # Phần chức năng chiếm 1/3 diện tích
+        right_layout = QVBoxLayout()
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
 
-        main_layout.addLayout(top_layout)
-        main_layout.addWidget(self.log_output)
+        right_layout.addWidget(button_group)
+        right_layout.addWidget(log_group)
+        
+        main_layout.addLayout(right_layout, 1)
 
         self.setLayout(main_layout)
 
@@ -122,13 +168,13 @@ class FaceRecognitionTab(QWidget):
 class MainApp(QTabWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Face Recognition System")
+        self.setWindowTitle("Hệ thống nhận diện khuôn mặt")
         self.setGeometry(100, 100, 1400, 800)
         self.initUI()
     
     def initUI(self):
         self.face_recognition_tab = FaceRecognitionTab()
-        self.addTab(self.face_recognition_tab, "Face Recognition")
+        self.addTab(self.face_recognition_tab, "Nhận diện khuôn mặt")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
