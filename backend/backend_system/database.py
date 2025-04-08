@@ -30,3 +30,4 @@ def get_database(path: str, db_name: str):
     if data is None:
         return {"message": "Không tìm thấy dữ liệu!"}
     return db
+

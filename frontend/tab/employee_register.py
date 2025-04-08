@@ -113,7 +113,7 @@ class EmployeeRegisterTab(QWidget):
 
     def start_camera(self):
         if self.cap is None:
-            self.cap = cv2.VideoCapture(0)
+            self.cap = cv2.VideoCapture(1)
             if not self.cap.isOpened():
                 QMessageBox.critical(self, "Lỗi", "Không thể mở camera!")
                 return

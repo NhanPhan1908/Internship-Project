@@ -9,14 +9,28 @@ from database import load_embeddings_from_db
 def recognize_face(image: np.array):
     embeddings, names = load_embeddings_from_db()
     if embeddings is None or names is None:
-        return {"message": "Không có dữ liệu nhận diện!"}
+        return {
+            "status": "fail",
+            "detect": False,
+            "recognize": False,
+            "message": "Không có dữ liệu nhận diện!"
+        }
 
+    # Chuyển ảnh sang định dạng PIL
     pil_img = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    
+    # Phát hiện khuôn mặt
     face = mtcnn(pil_img)
     
     if face is None:
-        return {"message": "Không phát hiện khuôn mặt!"}
+        return {
+            "status": "ok",
+            "detect": False,
+            "recognize": False,
+            "message": "Không phát hiện khuôn mặt!"
+        }
 
+    # Nhận diện khuôn mặt
     face = face.unsqueeze(0).to("cuda" if torch.cuda.is_available() else "cpu")
 
     with torch.no_grad():
@@ -24,7 +38,22 @@ def recognize_face(image: np.array):
 
     similarities = [1 - cosine(new_embedding, emb.flatten()) for emb in embeddings]
     best_match = np.argmax(similarities)
+    confidence = similarities[best_match]
 
-    if similarities[best_match] > 0.3:
-        return {"name": names[best_match], "confidence": similarities[best_match]}
-    return {"message": "Không tìm thấy nhân viên!"}
+    if confidence > 0.8:
+        return {
+            "status": "ok",
+            "detect": True,
+            "recognize": True,
+            "name": names[best_match],
+            "confidence": round(confidence, 4),
+            "message": f"Đã nhận diện: {names[best_match]} (tự tin: {round(confidence, 4)})"
+        }
+    else:
+        return {
+            "status": "ok",
+            "detect": True,
+            "recognize": False,
+            "message": "Không tìm thấy nhân viên!"
+        }
+

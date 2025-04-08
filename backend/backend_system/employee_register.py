@@ -3,12 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
 from pydantic import BaseModel
 from typing import Optional
-from facenet_pytorch import InceptionResnetV1
+from facenet_pytorch import InceptionResnetV1, MTCNN
 from PIL import Image
 import torch
 import numpy as np
 import io
-import cv2
 
 # Kết nối MongoDB
 client = MongoClient("mongodb://localhost:27017/")
@@ -18,11 +17,12 @@ collection = db["employees"]
 # Model nhận diện khuôn mặt
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 facenet = InceptionResnetV1(pretrained='casia-webface').eval().to(device)
+mtcnn = MTCNN(image_size=160, margin=0, device=device)
 
 # Khởi tạo FastAPI
 app = FastAPI()
 
-# CORS cho phép frontend truy cập (nếu frontend khác domain)
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -30,23 +30,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Hàm chuyển ảnh thành face embedding
+# 👉 Hàm xử lý ảnh và tạo embedding
 def get_face_embedding(image_bytes):
     try:
-        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        img = np.array(img)
+        pil_img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        face = mtcnn(pil_img)
+        if face is None:
+            print("❌ Không phát hiện khuôn mặt!")
+            return None
 
-        # Resize và xử lý ảnh
-        img = cv2.resize(img, (160, 160))  # Kích thước chuẩn cho Facenet
-        img = img / 255.0
-        img = torch.tensor(img, dtype=torch.float32).permute(2, 0, 1).unsqueeze(0).to(device)
+        face = face.unsqueeze(0).to(device)
 
         with torch.no_grad():
-            embedding = facenet(img).cpu().numpy()[0]
+            embedding = facenet(face).cpu().numpy()[0]
+
+        if np.isnan(embedding).any():
+            print("❌ Embedding chứa giá trị NaN.")
+            return None
+
         return embedding.tolist()
+    
     except Exception as e:
         print("Lỗi xử lý ảnh:", e)
         return None
-
-# Endpoint để đăng ký nhân viên
-

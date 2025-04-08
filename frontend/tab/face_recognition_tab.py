@@ -17,6 +17,7 @@ class FaceRecognitionTab(QWidget):
     def initUI(self):
         self.setWindowTitle("Nhận diện khuôn mặt")
         self.setGeometry(100, 100, 900, 600)
+        self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
         # Camera Viewfinder Group
         camera_group = QGroupBox("Camera Feed")
@@ -24,28 +25,39 @@ class FaceRecognitionTab(QWidget):
         self.camera_viewfinder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.camera_viewfinder.setFixedSize(480, 360)
         self.camera_viewfinder.setStyleSheet("border: 1px solid black; background-color: lightgray")
-
+        camera_layout = QVBoxLayout()
+        camera_layout.addWidget(self.camera_viewfinder)
+        camera_group.setLayout(camera_layout)
         # Recognition Result Group
         recognition_group = QGroupBox("Kết quả nhận diện")
         self.recognition_label = QLabel("Recognition Result")
         self.recognition_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.recognition_label.setFixedSize(480, 360)
         self.recognition_label.setStyleSheet("border: 1px solid black; background-color: lightgray")
-
+        recognition_layout = QVBoxLayout()
+        recognition_layout.addWidget(self.recognition_label)
+        recognition_group.setLayout(recognition_layout)
+        
         # Detect Result Group
         detect_group = QGroupBox("Detect Result")
         self.detect_label = QLabel("Detect Result")
         self.detect_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.detect_label.setFixedSize(480, 360)
         self.detect_label.setStyleSheet("border: 1px solid black; background-color: lightgray")
-
+        detect_layout = QVBoxLayout()
+        detect_layout.addWidget(self.detect_label)
+        detect_group.setLayout(detect_layout)
+        
         # Employee Data Group
         employee_group = QGroupBox("Employee Data")
         self.employee_data_label = QLabel("Employee Data")
         self.employee_data_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.employee_data_label.setFixedSize(480, 360)
         self.employee_data_label.setStyleSheet("border: 1px solid black; background-color: lightgray")
-
+        employee_layout = QVBoxLayout()
+        employee_layout.addWidget(self.employee_data_label)
+        employee_group.setLayout(employee_layout)
+        
         # Layout cho Camera Feed, Recognition, Detect và Employee Data (2x2)
         grid_layout = QVBoxLayout()
         
@@ -105,7 +117,7 @@ class FaceRecognitionTab(QWidget):
             self.log_output.append("⚠️ Camera đã được bật rồi!")
             return
 
-        self.capture = cv2.VideoCapture(0)
+        self.capture = cv2.VideoCapture(1)
         
         if not self.capture.isOpened():
             self.log_output.append("❌ Không thể mở camera. Vui lòng kiểm tra kết nối.")
@@ -125,7 +137,13 @@ class FaceRecognitionTab(QWidget):
 
         ret, frame = self.capture.read()
         if ret:
-            self.display_image(frame, self.camera_viewfinder)
+             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+             faces = self.face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5)
+
+        # Vẽ bounding boxes
+             for (x, y, w, h) in faces:
+                 cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+             self.display_image(frame, self.camera_viewfinder)
         else:
             self.log_output.append("❌ Lỗi khi đọc dữ liệu từ camera.")
 
@@ -140,7 +158,7 @@ class FaceRecognitionTab(QWidget):
         if not ret:
             self.log_output.append("❌ Không thể chụp ảnh từ camera.")
             return
-
+       
         _, img_encoded = cv2.imencode(".jpg", frame)
         files = {"file": ("face.jpg", img_encoded.tobytes(), "image/jpeg")}
 
@@ -148,11 +166,24 @@ class FaceRecognitionTab(QWidget):
             response = requests.post("http://localhost:8000/recognize/", files=files)
             if response.status_code == 200:
                 result = response.json()
-                self.log_output.append(f"✅ {result['message']}")
+                status = result.get("status", "unknown")
+                detect = result.get("detect", False)
+                recognize = result.get("recognize", False)
+                name = result.get("name", "Không rõ")
+                confidence = result.get("confidence", "N/A")
+                message = result.get("message", "")
+
+                self.log_output.append("📸 Kết quả nhận diện:")
+                self.log_output.append(f"🔹 Trạng thái: {status}")
+                self.log_output.append(f"🔹 Khuôn mặt phát hiện: {'✅ Có' if detect else '❌ Không'}")
+                self.log_output.append(f"🔹 Nhận diện thành công: {'✅ Có' if recognize else '❌ Không'}")
+                self.log_output.append(f"🔹 Tên: {name}")
+                self.log_output.append(f"🔹 Độ tự tin: {confidence}")
+                self.log_output.append(f"💬 Thông báo: {message}")
             else:
                 self.log_output.append(f"❌ Lỗi từ server: {response.status_code}")
         except Exception as e:
-            self.log_output.append(f"❌ Lỗi kết nối: {str(e)}")
+            self.log_output.append(f"❌ Lỗi kết  ngoài: {repr(e)}")
     
     def display_image(self, img, label):
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
