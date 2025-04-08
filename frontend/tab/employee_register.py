@@ -1,17 +1,16 @@
 import sys
 import cv2
 import numpy as np
+import requests
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout,
     QHBoxLayout, QLineEdit, QMessageBox, QTextEdit, QGroupBox
 )
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtCore import Qt, QTimer
-import pymongo
 
-client = pymongo.MongoClient("mongodb://localhost:27017/")
-db = client["Intern"]
-employees_collection = db["employees"]
+
+BACKEND_URL = "http://127.0.0.1:8000/register/"
 
 class EmployeeRegisterTab(QWidget):
     def __init__(self):
@@ -154,31 +153,46 @@ class EmployeeRegisterTab(QWidget):
         phone = self.input_phone.text().strip()
 
         if not name or not emp_id:
-            self.log_output.append("Cảnh báo: Vui lòng nhập đầy đủ thông tin!")
+            self.log_output.append("⚠️ Cảnh báo: Vui lòng nhập đầy đủ thông tin!")
             return
 
         if self.image is None:
-            self.log_output.append("Cảnh báo: Vui lòng chụp ảnh trước khi lưu!")
+            self.log_output.append("⚠️ Cảnh báo: Vui lòng chụp ảnh trước khi lưu!")
             return
 
-        
-        _, buffer = cv2.imencode('.jpg', self.image)
-        image_bytes = buffer.tobytes()
+    # Encode ảnh thành định dạng JPEG
+        success, buffer = cv2.imencode('.jpg', self.image)
+        if not success:
+            self.log_output.append("❌ Không thể chuyển ảnh!")
+            return
 
-        
-        employee_data = {
+        files = {
+            "image": ("face.jpg", buffer.tobytes(), "image/jpeg")}
+
+        data = {
+            "employee_id": emp_id,
             "name": name,
-            "empployee_id": emp_id,
             "address": address,
             "department": department,
             "position": position,
             "email": email,
             "phone": phone,
-    
         }
+        
+        try:
+            response = requests.post(BACKEND_URL, files=files, data=data)
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("status") == 1:
+                    self.log_output.append(f"✅ {result['message']}")
+                else:
+                    self.log_output.append(f"❌ {result['message']}")
+            else:
+                self.log_output.append(f"❌ Lỗi từ server: {response.status_code}") 
+        except requests.exceptions.RequestException as e:
+            self.log_output.append(f"❌ Lỗi kết nối: {str(e)}")
+        
 
-        employees_collection.insert_one(employee_data)
-        self.log_output.append("Dữ liệu đã được lưu thành công!")
 
     def closeEvent(self, event):
         if self.cap:

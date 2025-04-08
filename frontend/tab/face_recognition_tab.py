@@ -145,7 +145,7 @@ class FaceRecognitionTab(QWidget):
         files = {"file": ("face.jpg", img_encoded.tobytes(), "image/jpeg")}
 
         try:
-            response = requests.post(BACKEND_URL, files=files)
+            response = requests.post("http://localhost:8000/recognize/", files=files)
             if response.status_code == 200:
                 result = response.json()
                 self.log_output.append(f"✅ {result['message']}")
