@@ -2,7 +2,7 @@ import sys
 import cv2
 import requests
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, QGroupBox, QTabWidget
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, QTime
 from PyQt6.QtGui import QPixmap, QImage
 
 BACKEND_URL = "http://127.0.0.1:8000/recognize/" 
@@ -12,13 +12,17 @@ class FaceRecognitionTab(QWidget):
         super().__init__()
         self.initUI()
         self.capture = None
+        self.prev_face = None
+        self.stable_start_time = None
+        self.stability_duration = 2000
         self.timer = None
     
     def initUI(self):
         self.setWindowTitle("Nhận diện khuôn mặt")
         self.setGeometry(100, 100, 900, 600)
         self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-
+        
+        
         # Camera Viewfinder Group
         camera_group = QGroupBox("Camera Feed")
         self.camera_viewfinder = QLabel("Camera Feed")
@@ -79,7 +83,8 @@ class FaceRecognitionTab(QWidget):
         self.capture_button = QPushButton("Chụp & Nhận diện")
         self.capture_button.clicked.connect(self.capture_and_recognize_face)
         self.capture_button.setEnabled(False)
-
+        
+        
         button_layout = QVBoxLayout()
         button_layout.addWidget(self.start_camera_button)
         button_layout.addWidget(self.capture_button)
@@ -93,7 +98,8 @@ class FaceRecognitionTab(QWidget):
         log_layout = QVBoxLayout()
         log_layout.addWidget(self.log_output)
         log_group.setLayout(log_layout)
-
+        
+        
         # Layout Tổng
         main_layout = QHBoxLayout()
         
@@ -111,10 +117,18 @@ class FaceRecognitionTab(QWidget):
         main_layout.addLayout(right_layout, 1)
 
         self.setLayout(main_layout)
-
+    
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self.capture is None:
+            self.log_output.append("Đang mở camera...")
+            self.start_camera()
+        else:
+            self.log_output.append("Camera đã mở.")
+    
     def start_camera(self):
         if self.capture is not None:
-            self.log_output.append("⚠️ Camera đã được bật rồi!")
+            self.log_output.append("Camera đã được bật rồi!")
             return
 
         self.capture = cv2.VideoCapture(1)
@@ -136,16 +150,42 @@ class FaceRecognitionTab(QWidget):
             return
 
         ret, frame = self.capture.read()
-        if ret:
-             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-             faces = self.face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5)
-
-        # Vẽ bounding boxes
-             for (x, y, w, h) in faces:
-                 cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-             self.display_image(frame, self.camera_viewfinder)
-        else:
+        if not ret:
             self.log_output.append("❌ Lỗi khi đọc dữ liệu từ camera.")
+            return
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = self.face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5)
+
+        if len(faces) > 0:
+            (x, y, w, h) = faces[0]  #lấy khuôn mặt đầu tiên được cho vào camera
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2) # bonding box
+
+        # Hàm kiểm tra độ ổn định, nhận 4 giá trị prev_face, so sánh nếu không thay đổi nhiều <10 thì coi như giữ nguyên vị trí
+            if self.prev_face is not None:
+                 dx = abs(x - self.prev_face[0])
+                 dy = abs(y - self.prev_face[1])
+                 dw = abs(w - self.prev_face[2])
+                 dh = abs(h - self.prev_face[3])
+
+                 if dx < 40 and dy < 40 and dw < 40 and dh < 40:
+                    if self.stable_start_time is None:
+                         self.stable_start_time = QTime.currentTime()
+                    else:
+                         elapsed = self.stable_start_time.msecsTo(QTime.currentTime())
+                         if elapsed > self.stability_duration:
+                            self.log_output.append("✅ Gương mặt ổn định - tiến hành chụp...")
+                            self.capture_and_recognize_face()
+                            self.stable_start_time = None  # Reset sau khi chụp
+                 else:
+                    self.stable_start_time = None  # Di chuyển → reset thời gian
+            else:
+                self.stable_start_time = QTime.currentTime()
+            self.prev_face = (x, y, w, h)
+        else:
+            self.prev_face = None
+            self.stable_start_time = None
+        self.display_image(frame, self.camera_viewfinder)
 
     def capture_and_recognize_face(self):
         self.log_output.append("🔄 Đang gửi ảnh đến backend...")
@@ -184,6 +224,16 @@ class FaceRecognitionTab(QWidget):
                 self.log_output.append(f"❌ Lỗi từ server: {response.status_code}")
         except Exception as e:
             self.log_output.append(f"❌ Lỗi kết  ngoài: {repr(e)}")
+    
+    
+    def stop_camera(self):
+        if self.capture:
+            self.capture.release()
+            self.capture = None
+            self.log_output.append("❌ Camera đã tắt.")
+        if self.timer:
+            self.timer.stop()
+            self.timer = None
     
     def display_image(self, img, label):
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
