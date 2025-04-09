@@ -7,8 +7,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout, QLineEdit, QMessageBox, QTextEdit, QGroupBox
 )
 from PyQt6.QtGui import QImage, QPixmap
-from PyQt6.QtCore import Qt, QTimer
-
+from PyQt6.QtCore import Qt, QTimer, QTime
 
 BACKEND_URL = "http://127.0.0.1:8000/register/"
 
@@ -16,10 +15,14 @@ class EmployeeRegisterTab(QWidget):
     def __init__(self):
         super().__init__()
         self.initUI()
-        self.cap = None  # Camera
-        self.image = None  # Ảnh chụp
-        self.timer = QTimer(self)  # Timer để cập nhật camera
+        self.cap = None
+        self.image = None
+        self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_frame)
+        self.prev_face = None
+        self.stable_start_time = None
+        self.stability_duration = 2000  # milliseconds
+        self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
     def initUI(self):
         self.setWindowTitle("Đăng ký Nhân viên")
@@ -90,8 +93,6 @@ class EmployeeRegisterTab(QWidget):
 
         # Right Layout
         right_layout = QVBoxLayout()
-        right_layout.setContentsMargins(0, 0, 0, 0)  
-        right_layout.setSpacing(0)  
         right_layout.addWidget(form_group)
         right_layout.addWidget(button_group)
 
@@ -106,10 +107,18 @@ class EmployeeRegisterTab(QWidget):
 
         self.setLayout(main_layout)
 
-        # Kết nối sự kiện
+        # Kết nối
         self.start_button.clicked.connect(self.start_camera)
         self.capture_button.clicked.connect(self.capture_image)
         self.save_button.clicked.connect(self.save_data)
+
+    def showEvent(self, a0):
+        self.start_camera()
+        return super().showEvent(a0)
+
+    def hideEvent(self, a0):
+        self.close_camera()
+        return super().hideEvent(a0)
 
     def start_camera(self):
         if self.cap is None:
@@ -117,16 +126,63 @@ class EmployeeRegisterTab(QWidget):
             if not self.cap.isOpened():
                 QMessageBox.critical(self, "Lỗi", "Không thể mở camera!")
                 return
-            self.timer.start(30)  
+            self.timer.start(30)
+            self.log_output.append("📷 Camera đã bật.")
+
+    def close_camera(self):
+        if self.timer:
+            self.timer.stop()
+        if self.cap:
+            self.cap.release()
+            self.cap = None
+        self.log_output.append("🛑 Camera đã tắt.")
 
     def update_frame(self):
-        if self.cap:
-            ret, frame = self.cap.read()
-            if ret:
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                h, w, ch = frame.shape
-                qimg = QImage(frame.data, w, h, ch * w, QImage.Format.Format_RGB888)
-                self.camera_label.setPixmap(QPixmap.fromImage(qimg))
+        if self.cap is None:
+            return
+
+        ret, frame = self.cap.read()
+        if not ret:
+            self.log_output.append("❌ Không thể đọc từ camera.")
+            return
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = self.face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5)
+
+        if len(faces) > 0:
+            (x, y, w, h) = faces[0]
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+
+            if self.prev_face is not None:
+                dx = abs(x - self.prev_face[0])
+                dy = abs(y - self.prev_face[1])
+                dw = abs(w - self.prev_face[2])
+                dh = abs(h - self.prev_face[3])
+
+                if dx < 40 and dy < 40 and dw < 40 and dh < 40:
+                    if self.stable_start_time is None:
+                        self.stable_start_time = QTime.currentTime()
+                    else:
+                        elapsed = self.stable_start_time.msecsTo(QTime.currentTime())
+                        if elapsed > self.stability_duration:
+                            self.log_output.append("✅ Gương mặt ổn định - tiến hành chụp.")
+                            self.capture_image()
+                            self.stable_start_time = None
+                else:
+                    self.stable_start_time = None
+            else:
+                self.stable_start_time = QTime.currentTime()
+
+            self.prev_face = (x, y, w, h)
+        else:
+            self.prev_face = None
+            self.stable_start_time = None
+
+        self.display_image(frame)
+
+    def display_image(self, frame):
+        q_img = self.convert_cv_qt(frame)
+        self.camera_label.setPixmap(QPixmap.fromImage(q_img))
 
     def capture_image(self):
         if self.cap:
@@ -134,9 +190,9 @@ class EmployeeRegisterTab(QWidget):
             if ret:
                 self.image = frame.copy()
                 self.face_picture.setPixmap(QPixmap.fromImage(self.convert_cv_qt(frame)))
-                self.log_output.append("Ảnh đã chụp thành công!")
+                self.log_output.append("📸 Đã chụp ảnh.")
             else:
-                self.log_output.append("Lỗi: Không thể chụp ảnh!")
+                self.log_output.append("❌ Không thể chụp ảnh.")
 
     def convert_cv_qt(self, frame):
         rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -153,21 +209,21 @@ class EmployeeRegisterTab(QWidget):
         phone = self.input_phone.text().strip()
 
         if not name or not emp_id:
-            self.log_output.append("⚠️ Cảnh báo: Vui lòng nhập đầy đủ thông tin!")
+            self.log_output.append("⚠️ Vui lòng nhập đầy đủ tên và mã nhân viên!")
             return
 
         if self.image is None:
-            self.log_output.append("⚠️ Cảnh báo: Vui lòng chụp ảnh trước khi lưu!")
+            self.log_output.append("⚠️ Vui lòng chụp ảnh trước khi lưu!")
             return
 
-    # Encode ảnh thành định dạng JPEG
         success, buffer = cv2.imencode('.jpg', self.image)
         if not success:
-            self.log_output.append("❌ Không thể chuyển ảnh!")
+            self.log_output.append("❌ Không thể mã hóa ảnh.")
             return
 
         files = {
-            "image": ("face.jpg", buffer.tobytes(), "image/jpeg")}
+            "image": ("face.jpg", buffer.tobytes(), "image/jpeg")
+        }
 
         data = {
             "employee_id": emp_id,
@@ -178,7 +234,7 @@ class EmployeeRegisterTab(QWidget):
             "email": email,
             "phone": phone,
         }
-        
+
         try:
             response = requests.post(BACKEND_URL, files=files, data=data)
             if response.status_code == 200:
@@ -188,17 +244,12 @@ class EmployeeRegisterTab(QWidget):
                 else:
                     self.log_output.append(f"❌ {result['message']}")
             else:
-                self.log_output.append(f"❌ Lỗi từ server: {response.status_code}") 
+                self.log_output.append(f"❌ Server trả về lỗi {response.status_code}")
         except requests.exceptions.RequestException as e:
             self.log_output.append(f"❌ Lỗi kết nối: {str(e)}")
-        
-
 
     def closeEvent(self, event):
-        if self.cap:
-            self.timer.stop()
-            self.cap.release()
-            self.cap = None
+        self.close_camera()
         event.accept()
 
 if __name__ == "__main__":

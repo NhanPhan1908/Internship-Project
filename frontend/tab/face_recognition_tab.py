@@ -125,6 +125,9 @@ class FaceRecognitionTab(QWidget):
             self.start_camera()
         else:
             self.log_output.append("Camera đã mở.")
+    def hideEvent(self, a0):
+        self.stop_camera()
+        return super().hideEvent(a0)
     
     def start_camera(self):
         if self.capture is not None:
