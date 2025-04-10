@@ -4,10 +4,11 @@ import numpy as np
 import requests
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout,
-    QHBoxLayout, QLineEdit, QMessageBox, QTextEdit, QGroupBox
+    QHBoxLayout, QLineEdit, QTextEdit, QGroupBox
 )
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtCore import Qt, QTimer, QTime
+from .camera_thread import CameraThread  
 
 BACKEND_URL = "http://127.0.0.1:8000/register/"
 
@@ -15,15 +16,15 @@ class EmployeeRegisterTab(QWidget):
     def __init__(self):
         super().__init__()
         self.initUI()
-        self.cap = None
         self.image = None
         self.timer = QTimer(self)
-        self.timer.timeout.connect(self.update_frame)
         self.prev_face = None
+        # khai báo cho thread camera
+        self.camera_thread = None
         self.stable_start_time = None
         self.stability_duration = 2000  # milliseconds
         self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-
+        self.should_stop_camera = True
     def initUI(self):
         self.setWindowTitle("Đăng ký Nhân viên")
         self.setGeometry(100, 100, 900, 600)
@@ -115,37 +116,32 @@ class EmployeeRegisterTab(QWidget):
     def showEvent(self, a0):
         self.start_camera()
         return super().showEvent(a0)
-
+    
     def hideEvent(self, a0):
-        self.close_camera()
+        if self.should_stop_camera:
+            self.close_camera()
         return super().hideEvent(a0)
 
     def start_camera(self):
-        if self.cap is None:
-            self.cap = cv2.VideoCapture(1)
-            if not self.cap.isOpened():
-                QMessageBox.critical(self, "Lỗi", "Không thể mở camera!")
-                return
-            self.timer.start(30)
+        if self.camera_thread is None:
+            self.camera_thread = CameraThread()
+            self.camera_thread.frame_ready.connect(self.update_frame)
+            self.camera_thread.start()
             self.log_output.append("📷 Camera đã bật.")
 
     def close_camera(self):
-        if self.timer:
-            self.timer.stop()
-        if self.cap:
-            self.cap.release()
-            self.cap = None
-        self.log_output.append("🛑 Camera đã tắt.")
+        if self.camera_thread:
+            self.camera_thread.stop()
+            self.camera_thread = None
+            self.log_output.append("❌ Camera đã tắt.")
 
-    def update_frame(self):
-        if self.cap is None:
-            return
-
-        ret, frame = self.cap.read()
-        if not ret:
-            self.log_output.append("❌ Không thể đọc từ camera.")
-            return
-
+    def update_frame(self , frame):
+        if frame is None:
+            self.log_output.append("⚠️ Không thể đọc frame từ camera.")
+            return 
+        
+        self.last_frame = frame.copy()
+    
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = self.face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5)
 
@@ -184,15 +180,13 @@ class EmployeeRegisterTab(QWidget):
         q_img = self.convert_cv_qt(frame)
         self.camera_label.setPixmap(QPixmap.fromImage(q_img))
 
-    def capture_image(self):
-        if self.cap:
-            ret, frame = self.cap.read()
-            if ret:
-                self.image = frame.copy()
-                self.face_picture.setPixmap(QPixmap.fromImage(self.convert_cv_qt(frame)))
-                self.log_output.append("📸 Đã chụp ảnh.")
-            else:
-                self.log_output.append("❌ Không thể chụp ảnh.")
+    def capture_image(self,frame = None):
+        if frame is not None:
+            self.image = frame.copy()
+            self.face_picture.setPixmap(QPixmap.fromImage(self.convert_cv_qt(frame)))
+            self.log_output.append("📸 Đã chụp ảnh.")
+        else:
+            self.log_output.append("❌ Không thể chụp ảnh.")
 
     def convert_cv_qt(self, frame):
         rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -249,6 +243,7 @@ class EmployeeRegisterTab(QWidget):
             self.log_output.append(f"❌ Lỗi kết nối: {str(e)}")
 
     def closeEvent(self, event):
+        self.should_stop_camera = True
         self.close_camera()
         event.accept()
 
