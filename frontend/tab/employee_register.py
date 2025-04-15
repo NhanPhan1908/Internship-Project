@@ -32,12 +32,12 @@ class EmployeeRegisterTab(QWidget):
         # Camera Group
         camera_group = QGroupBox("Camera & Ảnh Chụp")
         self.camera_label = QLabel(self)
-        self.camera_label.setFixedSize(400, 300)
+        self.camera_label.setFixedSize(480, 360)
         self.camera_label.setStyleSheet("border: 1px solid black; background-color: lightgray;")
         self.camera_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.face_picture = QLabel(self)
-        self.face_picture.setFixedSize(400, 300)
+        self.face_picture.setFixedSize(480, 360)
         self.face_picture.setStyleSheet("border: 1px solid black; background-color: lightgray;")
         self.face_picture.setAlignment(Qt.AlignmentFlag.AlignCenter)
 

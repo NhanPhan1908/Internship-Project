@@ -184,6 +184,7 @@ class FaceRecognitionTab(QWidget):
         self.log_output.append(f"🔹 Phát hiện: {'✅ Có' if result.get('detect') else '❌ Không'}")
         self.log_output.append(f"🔹 Nhận diện: {'✅ Có' if result.get('recognize') else '❌ Không'}")
         self.log_output.append(f"🔹 Tên: {result.get('name', 'Không rõ')}")
+        self.log_output.append(f" employee_id: {result.get('employee_id', 'N/A')}")
         self.log_output.append(f"🔹 Độ tự tin: {result.get('confidence', 'N/A')}")
         self.log_output.append(f"💬 {result.get('message', '')}")
 

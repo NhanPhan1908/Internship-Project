@@ -7,7 +7,7 @@ from model import mtcnn, facenet
 from database import load_embeddings_from_db
 
 def recognize_face(image: np.array):
-    embeddings, names = load_embeddings_from_db()
+    embeddings, names, employee_id = load_embeddings_from_db()
     if embeddings is None or names is None:
         return {
             "status": "fail",
@@ -36,18 +36,21 @@ def recognize_face(image: np.array):
     with torch.no_grad():
         new_embedding = facenet(face).cpu().numpy().flatten()
 
+    # Chuyển embedding thành list
+    new_embedding = new_embedding.tolist()
+
     similarities = [1 - cosine(new_embedding, emb.flatten()) for emb in embeddings]
     best_match = np.argmax(similarities)
     confidence = similarities[best_match]
-
     if confidence > 0.8:
         return {
             "status": "ok",
             "detect": True,
             "recognize": True,
             "name": names[best_match],
+            "employee_id": employee_id[best_match],  
             "confidence": round(confidence, 4),
-            "message": f"Đã nhận diện: {names[best_match]} (tự tin: {round(confidence, 4)})"
+            "message": f"Đã nhận diện thành công"
         }
     else:
         return {
@@ -56,4 +59,3 @@ def recognize_face(image: np.array):
             "recognize": False,
             "message": "Không tìm thấy nhân viên!"
         }
-

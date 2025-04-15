@@ -16,13 +16,14 @@ checkin_collection = db["checkin"]
 checkout_collection = db["checkout"]
 
 def load_embeddings_from_db():
-    embeddings, names = [], []
-    for record in employees_collection.find({}, {"name": 1, "embedding": 1}):
+    embeddings, names , employee_id= [], [], []
+    for record in employees_collection.find({}, {"name": 1, "embedding": 1, "employee_id":1}):
         if "embedding" not in record:
             continue
         names.append(record["name"])
         embeddings.append(np.array(record["embedding"]))
-    return (np.array(embeddings), names) if embeddings else (None, None)
+        employee_id.append(record["employee_id"])
+    return (np.array(embeddings), names, employee_id) if embeddings else (None, None, None)
 
 def get_database(path: str, db_name: str):
     collection = client[db_name][path]

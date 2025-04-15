@@ -21,7 +21,7 @@ class CameraThread(QThread):
         while self.running:
             ret, frame = self.capture.read()
             if ret:
-                self.frame_ready.emit(frame)  # emit frame gốc (numpy array)
+                self.frame_ready.emit(frame)  # emit frame gốc (numpy array)ghc
             else:
                 print("⚠️ Không thể đọc frame từ webcam.")
     

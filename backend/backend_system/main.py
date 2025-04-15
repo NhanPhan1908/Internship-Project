@@ -119,7 +119,7 @@ async def recognize(file: UploadFile = File(...)):
         "employee_id": employee_id,
         "name": name,
         "confidence": 1,
-        "embedding": embedding,
+        "employee_id": employee_id,
         "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "status": "checkin"
     }
@@ -132,7 +132,11 @@ async def recognize(file: UploadFile = File(...)):
         "late_time": get_late_minute()
     }
     checkin_collection.insert_one(new_checkin)
-    return {"status": result["status"],
+    return {
+    "status": result["status"],
     "detect": result["detect"],
     "recognize": result["recognize"],
+    "name": result.get("name", "Không rõ"),
+    "confidence": result.get("confidence", "N/A"),
+    "employee_id": result.get("employee_id","N/A"),
     "message": result["message"]}
