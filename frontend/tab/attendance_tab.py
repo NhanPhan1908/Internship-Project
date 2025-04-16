@@ -72,7 +72,7 @@ class AttendanceTab(QWidget):
         # Table
         self.table = QTableWidget()
         self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(["Employee ID", "Name", "Confidence", "Embedding", "Thời gian", "Trạng thái"])
+        self.table.setHorizontalHeaderLabels(["Employee ID", "Name", "Confidence", "Thời gian", "Trạng thái"])
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.cellClicked.connect(self.show_detail)
         left_layout.addWidget(self.table)
@@ -161,13 +161,12 @@ class AttendanceTab(QWidget):
                 emp_id = record.get("employee_id", "")
                 name = record.get("name", "")
                 confidence = record.get("confidence", "")
-                embedding = str(record.get("embedding", ""))[:30] + "..."
                 time_val = record.get("time", "")
                 status = record.get("status", "")
 
                 time_str = time_val.strftime("%Y-%m-%d %H:%M:%S") if isinstance(time_val, datetime) else str(time_val)
 
-                for col, val in enumerate([emp_id, name, confidence, embedding, time_str, status]):
+                for col, val in enumerate([emp_id, name, confidence, time_str, status]):
                     item = QTableWidgetItem(str(val))
                     item.setToolTip(str(val))
                     self.table.setItem(row_idx, col, item)
@@ -186,7 +185,7 @@ class AttendanceTab(QWidget):
             path = "attendance_export.csv"
             with open(path, mode="w", newline="", encoding="utf-8") as file:
                 writer = csv.writer(file)
-                headers = ["Employee ID", "Name", "Confidence", "Embedding", "Time", "Status"]
+                headers = ["Employee ID", "Name", "Confidence", "Time", "Status"]
                 writer.writerow(headers)
 
                 for row in range(self.table.rowCount()):
@@ -209,7 +208,6 @@ class AttendanceTab(QWidget):
                 "employee_id": "EMP999",
                 "name": "New Employee",
                 "confidence": 95,
-                "embedding": "[0.123, 0.456]",
                 "time": now,
                 "status": "Có mặt"
             }

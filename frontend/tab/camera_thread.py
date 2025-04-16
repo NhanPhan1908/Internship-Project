@@ -7,6 +7,7 @@ class CameraThread(QThread):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.read_error_logged = False  
         self.capture = cv2.VideoCapture(1, cv2.CAP_DSHOW)
         if not self.capture.isOpened():
             print("⚠️ Không thể mở webcam.")
@@ -22,8 +23,11 @@ class CameraThread(QThread):
             ret, frame = self.capture.read()
             if ret:
                 self.frame_ready.emit(frame)  # emit frame gốc (numpy array)ghc
+                self.read_error_logged = False
             else:
-                print("⚠️ Không thể đọc frame từ webcam.")
+                if not self.read_error_logged:
+                    print("⚠️ Không thể đọc frame từ webcam.")
+                    self.read_error_logged = True
     
     def stop(self):
         self.running = False

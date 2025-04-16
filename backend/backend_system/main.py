@@ -4,15 +4,16 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from logic_business import calculate_salary, get_work_schedule, get_attendance
 from config import DATABASE_URL
 from database import get_database
-from bson import ObjectId
+from bson import ObjectId   
 from utils.AEShashing import encrypt_embedding, decrypt_embedding
 from checkin_checkout import recognize_face
 from util import get_late_minute
-
+from anti_spoofing import anti_spoofing
 import cv2
+from model import xception
 import numpy as np
 from pymongo import MongoClient
-import datetime
+from datetime import datetime
 import torch
 from employee_register import get_face_embedding
 from facenet_pytorch import InceptionResnetV1, MTCNN
@@ -102,41 +103,57 @@ async def register_employee(
     
 # API nhận diện khuôn mặt
 
+
 @app.post("/recognize/")
 async def recognize(file: UploadFile = File(...)):
+    # Đọc ảnh từ file tải lên
     image_bytes = await file.read()
     image = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
     
+    # Bước 1: Nhận diện khuôn mặt
     result = recognize_face(image)
-    if result is None:
-       raise HTTPException(status_code=400, detail="Không nhận diện được khuôn mặt")
-   
+    
+    if not result["detect"]:
+        raise HTTPException(status_code=400, detail="Không phát hiện khuôn mặt")
+    
+    if not result["recognize"]:
+        raise HTTPException(status_code=400, detail="Không nhận diện được nhân viên")
+    
     employee_id = result.get("employee_id")
     name = result.get("name")
-    embedding = result.get("embedding")
+    confidence = result.get("confidence", "N/A")
+
+    # Bước 2: Kiểm tra giả mạo (anti-spoofing)
+    is_real = anti_spoofing(image) 
     
+    if not is_real:
+        raise HTTPException(status_code=400, detail="Khuôn mặt giả mạo, không thể tiếp tục")
+
+    # Bước 3: Lưu thông tin vào cơ sở dữ liệu
     new_attendance = {
         "employee_id": employee_id,
         "name": name,
-        "confidence": 1,
-        "employee_id": employee_id,
-        "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "confidence": confidence,
+        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "status": "checkin"
     }
     attendance_collection.insert_one(new_attendance)
-    
+
     new_checkin = {
         "employee_id": employee_id,
         "name": name,
-        "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "late_time": get_late_minute()
     }
     checkin_collection.insert_one(new_checkin)
+
+    # Trả về kết quả nhận diện và thông tin check-in
     return {
-    "status": result["status"],
-    "detect": result["detect"],
-    "recognize": result["recognize"],
-    "name": result.get("name", "Không rõ"),
-    "confidence": result.get("confidence", "N/A"),
-    "employee_id": result.get("employee_id","N/A"),
-    "message": result["message"]}
+        "status": result["status"],
+        "detect": result["detect"],
+        "recognize": result["recognize"],
+        "name": name,
+        "confidence": confidence,
+        "employee_id": employee_id,
+        "message": result["message"]
+    }
