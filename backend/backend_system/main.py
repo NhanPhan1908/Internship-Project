@@ -25,6 +25,7 @@ db = client["Intern"]
 employees_collection = db["employees"]
 attendance_collection = db["attendance"]
 checkin_collection = db["checkin"]
+salary_collection = db["salary"]
 checkout_collection = db["checkout"]
 
 
@@ -95,7 +96,19 @@ async def register_employee(
             "embedding": embedding,
         }
         employees_collection.insert_one(new_employee)
-
+        #khi thêm 1 nhân viên, tự thêm 1 bảng lương tương ứng
+        new_salary_empolyee = {
+            "employee_id": employee_id,
+            "name": name,
+            "salary": 0,  
+            "work_hour": 0,
+            "overtime_hours": 0,
+            "late_minute": 0,
+            "absent_without_permission": 0,
+            "absent_with_permission": 0,
+            "base_salary": 0,
+        }
+        salary_collection.insert_one(new_salary_empolyee)
         return {"status": 1, "message": "Đăng ký nhân viên thành công!"}
     except Exception as e:
         print("Lỗi server:", e)
@@ -146,7 +159,27 @@ async def recognize(file: UploadFile = File(...)):
         "late_time": get_late_minute()
     }
     checkin_collection.insert_one(new_checkin)
+    
+        # Bước 4: Cập nhật lương
+    salary_record = salary_collection.find_one({"employee_id": employee_id})
 
+    if salary_record:
+        updated_work_hour = salary_record.get("work_hour", 0) + 1
+
+        base_salary = salary_record.get("base_salary", 0)
+        new_salary = base_salary * updated_work_hour
+
+        salary_collection.update_one(
+            {"employee_id": employee_id},
+            {
+                "$set": {
+                    "work_hour": updated_work_hour,
+                    "salary": new_salary
+                }
+            }
+        )
+
+    
     # Trả về kết quả nhận diện và thông tin check-in
     return {
         "status": result["status"],

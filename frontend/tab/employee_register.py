@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtCore import Qt, QTimer, QTime
 from .camera_thread import CameraThread  
-
 BACKEND_URL = "http://127.0.0.1:8000/register/"
 
 class EmployeeRegisterTab(QWidget):
@@ -19,17 +18,27 @@ class EmployeeRegisterTab(QWidget):
         self.image = None
         self.timer = QTimer(self)
         self.prev_face = None
-        # khai báo cho thread camera
+
+        self.camera_label.setScaledContents(True)
+        self.face_picture.setScaledContents(True)
+
+        self.face_detect_timer = QTimer(self)
+        self.face_detect_timer.timeout.connect(self.check_stable_face)
+        self.face_detect_timer.start(500)
+
+        self.current_frame = None
         self.camera_thread = None
         self.stable_start_time = None
-        self.stability_duration = 2000  # milliseconds
+        self.stability_duration = 2000
         self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         self.should_stop_camera = True
+        self.previous_face = None
+        self.has_captured = False
+
     def initUI(self):
         self.setWindowTitle("Đăng ký Nhân viên")
         self.setGeometry(100, 100, 900, 600)
 
-        # Camera Group
         camera_group = QGroupBox("Camera & Ảnh Chụp")
         self.camera_label = QLabel(self)
         self.camera_label.setFixedSize(480, 360)
@@ -46,7 +55,6 @@ class EmployeeRegisterTab(QWidget):
         camera_layout.addWidget(self.face_picture)
         camera_group.setLayout(camera_layout)
 
-        # Form Group
         form_group = QGroupBox("Thông Tin Nhân Viên")
         self.input_name = QLineEdit(self)
         self.input_name.setPlaceholderText("Nhập tên nhân viên")
@@ -64,13 +72,12 @@ class EmployeeRegisterTab(QWidget):
         self.input_phone.setPlaceholderText("Nhập số điện thoại")
 
         form_layout = QVBoxLayout()
-        for widget in [self.input_name, self.input_id, self.input_address, 
-                       self.input_department, self.input_position, 
+        for widget in [self.input_name, self.input_id, self.input_address,
+                       self.input_department, self.input_position,
                        self.input_mail, self.input_phone]:
             form_layout.addWidget(widget)
         form_group.setLayout(form_layout)
 
-        # Button Group
         button_group = QGroupBox("Chức Năng")
         self.start_button = QPushButton("Bật Camera", self)
         self.capture_button = QPushButton("Chụp Ảnh", self)
@@ -82,7 +89,6 @@ class EmployeeRegisterTab(QWidget):
         button_layout.addWidget(self.save_button)
         button_group.setLayout(button_layout)
 
-        # Log Group
         log_group = QGroupBox("Phản hồi từ hệ thống")
         self.log_output = QTextEdit(self)
         self.log_output.setReadOnly(True)
@@ -92,12 +98,10 @@ class EmployeeRegisterTab(QWidget):
         log_layout.addWidget(self.log_output)
         log_group.setLayout(log_layout)
 
-        # Right Layout
         right_layout = QVBoxLayout()
         right_layout.addWidget(form_group)
         right_layout.addWidget(button_group)
 
-        # Main Layout
         main_top_layout = QHBoxLayout()
         main_top_layout.addWidget(camera_group, 2)
         main_top_layout.addLayout(right_layout, 1)
@@ -108,7 +112,6 @@ class EmployeeRegisterTab(QWidget):
 
         self.setLayout(main_layout)
 
-        # Kết nối
         self.start_button.clicked.connect(self.start_camera)
         self.capture_button.clicked.connect(self.capture_image)
         self.save_button.clicked.connect(self.save_data)
@@ -116,7 +119,7 @@ class EmployeeRegisterTab(QWidget):
     def showEvent(self, a0):
         self.start_camera()
         return super().showEvent(a0)
-    
+
     def hideEvent(self, a0):
         if self.should_stop_camera:
             self.close_camera()
@@ -135,52 +138,51 @@ class EmployeeRegisterTab(QWidget):
             self.camera_thread = None
             self.log_output.append("❌ Camera đã tắt.")
 
-    def update_frame(self , frame):
+    def update_frame(self, frame):
         if frame is None:
-            self.log_output.append("⚠️ Không thể đọc frame từ camera.")
-            return 
-        
-        self.last_frame = frame.copy()
-    
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = self.face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5)
+            return
+        self.current_frame = frame.copy()
+        self.display_image(frame)
 
+    def check_stable_face(self):
+        if self.current_frame is None:
+            return
+
+        gray = cv2.cvtColor(self.current_frame, cv2.COLOR_BGR2GRAY)
+        faces = self.face_cascade.detectMultiScale(gray, 1.3, 5)
         if len(faces) > 0:
             (x, y, w, h) = faces[0]
-            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
 
-            if self.prev_face is not None:
-                dx = abs(x - self.prev_face[0])
-                dy = abs(y - self.prev_face[1])
-                dw = abs(w - self.prev_face[2])
-                dh = abs(h - self.prev_face[3])
+            if self.previous_face:
+                (prev_x, prev_y, prev_w, prev_h) = self.previous_face
+                dx, dy, dw, dh = abs(x - prev_x), abs(y - prev_y), abs(w - prev_w), abs(h - prev_h)
 
                 if dx < 40 and dy < 40 and dw < 40 and dh < 40:
                     if self.stable_start_time is None:
                         self.stable_start_time = QTime.currentTime()
                     else:
                         elapsed = self.stable_start_time.msecsTo(QTime.currentTime())
-                        if elapsed > self.stability_duration:
+                        if elapsed > self.stability_duration and not self.has_captured:
                             self.log_output.append("✅ Gương mặt ổn định - tiến hành chụp.")
-                            self.capture_image()
-                            self.stable_start_time = None
+                            self.capture_image(self.current_frame)
+                            self.has_captured = True
                 else:
                     self.stable_start_time = None
+                    self.has_captured = False
             else:
                 self.stable_start_time = QTime.currentTime()
 
-            self.prev_face = (x, y, w, h)
+            self.previous_face = (x, y, w, h)
         else:
-            self.prev_face = None
             self.stable_start_time = None
-
-        self.display_image(frame)
+            self.previous_face = None
+            self.has_captured = False
 
     def display_image(self, frame):
         q_img = self.convert_cv_qt(frame)
         self.camera_label.setPixmap(QPixmap.fromImage(q_img))
 
-    def capture_image(self,frame = None):
+    def capture_image(self, frame=None):
         if frame is not None:
             self.image = frame.copy()
             self.face_picture.setPixmap(QPixmap.fromImage(self.convert_cv_qt(frame)))

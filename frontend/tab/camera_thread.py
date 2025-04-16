@@ -2,6 +2,7 @@
 from PyQt6.QtCore import QThread, pyqtSignal
 import cv2
 from PyQt6.QtGui import QImage, QPixmap
+import time
 class CameraThread(QThread):
     frame_ready = pyqtSignal(object)
 
@@ -28,6 +29,7 @@ class CameraThread(QThread):
                 if not self.read_error_logged:
                     print("⚠️ Không thể đọc frame từ webcam.")
                     self.read_error_logged = True
+            time.sleep(0.03)
     
     def stop(self):
         self.running = False
