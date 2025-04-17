@@ -22,9 +22,6 @@ class EmployeeRegisterTab(QWidget):
         self.camera_label.setScaledContents(True)
         self.face_picture.setScaledContents(True)
 
-        self.face_detect_timer = QTimer(self)
-        self.face_detect_timer.timeout.connect(self.check_stable_face)
-        self.face_detect_timer.start(500)
 
         self.current_frame = None
         self.camera_thread = None
@@ -126,7 +123,7 @@ class EmployeeRegisterTab(QWidget):
         return super().hideEvent(a0)
 
     def start_camera(self):
-        if self.camera_thread is None:
+        if self.camera_thread is None or not self.camera_thread.isRunning():
             self.camera_thread = CameraThread()
             self.camera_thread.frame_ready.connect(self.update_frame)
             self.camera_thread.start()
@@ -144,51 +141,21 @@ class EmployeeRegisterTab(QWidget):
         self.current_frame = frame.copy()
         self.display_image(frame)
 
-    def check_stable_face(self):
-        if self.current_frame is None:
-            return
-
-        gray = cv2.cvtColor(self.current_frame, cv2.COLOR_BGR2GRAY)
-        faces = self.face_cascade.detectMultiScale(gray, 1.3, 5)
-        if len(faces) > 0:
-            (x, y, w, h) = faces[0]
-
-            if self.previous_face:
-                (prev_x, prev_y, prev_w, prev_h) = self.previous_face
-                dx, dy, dw, dh = abs(x - prev_x), abs(y - prev_y), abs(w - prev_w), abs(h - prev_h)
-
-                if dx < 40 and dy < 40 and dw < 40 and dh < 40:
-                    if self.stable_start_time is None:
-                        self.stable_start_time = QTime.currentTime()
-                    else:
-                        elapsed = self.stable_start_time.msecsTo(QTime.currentTime())
-                        if elapsed > self.stability_duration and not self.has_captured:
-                            self.log_output.append("✅ Gương mặt ổn định - tiến hành chụp.")
-                            self.capture_image(self.current_frame)
-                            self.has_captured = True
-                else:
-                    self.stable_start_time = None
-                    self.has_captured = False
-            else:
-                self.stable_start_time = QTime.currentTime()
-
-            self.previous_face = (x, y, w, h)
-        else:
-            self.stable_start_time = None
-            self.previous_face = None
-            self.has_captured = False
 
     def display_image(self, frame):
         q_img = self.convert_cv_qt(frame)
         self.camera_label.setPixmap(QPixmap.fromImage(q_img))
 
     def capture_image(self, frame=None):
-        if frame is not None:
+        if frame is None:
+           frame = self.current_frame
+        if frame is not None and isinstance(frame, np.ndarray):
             self.image = frame.copy()
             self.face_picture.setPixmap(QPixmap.fromImage(self.convert_cv_qt(frame)))
             self.log_output.append("📸 Đã chụp ảnh.")
         else:
             self.log_output.append("❌ Không thể chụp ảnh.")
+
 
     def convert_cv_qt(self, frame):
         rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
