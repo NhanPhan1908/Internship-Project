@@ -110,11 +110,11 @@ class EmployeeRegisterTab(QWidget):
         self.setLayout(main_layout)
 
         self.start_button.clicked.connect(self.start_camera)
-        self.capture_button.clicked.connect(self.capture_image)
+        self.capture_button.clicked.connect(lambda: self.capture_image())
         self.save_button.clicked.connect(self.save_data)
 
     def showEvent(self, a0):
-        self.start_camera()
+        QTimer.singleShot(300, self.start_camera)
         return super().showEvent(a0)
 
     def hideEvent(self, a0):
@@ -147,8 +147,12 @@ class EmployeeRegisterTab(QWidget):
         self.camera_label.setPixmap(QPixmap.fromImage(q_img))
 
     def capture_image(self, frame=None):
+        print("➡️ capture_image() called")
+        print("frame is None:", frame is None)
+
         if frame is None:
            frame = self.current_frame
+        print("Type of frame:", type(frame))   
         if frame is not None and isinstance(frame, np.ndarray):
             self.image = frame.copy()
             self.face_picture.setPixmap(QPixmap.fromImage(self.convert_cv_qt(frame)))
