@@ -71,10 +71,14 @@ class AttendanceTab(QWidget):
 
         # Table
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
+        self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(["Employee ID", "Name", "Confidence", "Thời gian", "Trạng thái"])
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.cellClicked.connect(self.show_detail)
+        self.table.setColumnWidth(1,200)
+        self.table.setColumnWidth(2 , 200,)
+        self.table.setColumnWidth(3, 200)
+        self.table.setColumnWidth(4, 250)
         left_layout.addWidget(self.table)
 
         # Stats
@@ -151,7 +155,35 @@ class AttendanceTab(QWidget):
                 query["status"] = status_val
 
             records = list(attendance_collection.find(query).sort("time", -1))
+            
+            fixed_records = []
+            for record in records:
+                time_val = record.get("time")
+                if isinstance(time_val, str):
+                    try:
+                        record["time"] = datetime.strftime(time_val, "%Y-%m-%d %H:%M:%S")
+                    except Exception:
+                        continue  # Bỏ qua nếu sai định dạng
+                fixed_records.append(record)
+            
+            filtered = [
+                r for r in fixed_records
+                if query["time"]["$gte"] <= r["time"] <= query["time"]["$lte"]
+                and (query.get("confidence", {}).get("$gte", 0) <= r.get("confidence", 0))
+                and (
+                    status_val == "Tất cả"
+                    or r.get("status", "").lower() == status_val.lower()
+                )
+                and (
+                    not text or
+                    text in str(r.get("employee_id", "")).lower() or
+                    text in str(r.get("name", "")).lower()
+                )
 
+            ]
+            filtered.sort(key=lambda x:x["time"], reverse= True )
+            
+            
             unique_names = set()
             counter_by_person = Counter()
 
@@ -203,7 +235,7 @@ class AttendanceTab(QWidget):
             QMessageBox.critical(self, "Lỗi", "Không thể kết nối MongoDB.")
             return
         try:
-            now = datetime.now()
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             new_record = {
                 "employee_id": "EMP999",
                 "name": "New Employee",
@@ -253,7 +285,20 @@ class AttendanceTab(QWidget):
     def show_detail(self, row, col):
         detail = ""
         for i in range(self.table.columnCount()):
-            col_name = self.table.horizontalHeaderItem(i).text()
-            val = self.table.item(row, i).text()
+            header_item = self.table.horizontalHeaderItem(i)
+            if header_item is not None:  # Kiểm tra nếu header tồn tại
+                col_name = header_item.text()
+            else:
+                col_name = f"Column {i}"  # Gán tên cột mặc định nếu không có header
+        
+        # Kiểm tra nếu item tại (row, i) tồn tại
+            item = self.table.item(row, i)
+            if item is not None:
+                val = item.text()
+            else:
+                val = "No data"  # Gán giá trị mặc định nếu không có dữ liệu
+        
             detail += f"{col_name}: {val}\n"
+    
         QMessageBox.information(self, "Chi tiết bản ghi", detail)
+

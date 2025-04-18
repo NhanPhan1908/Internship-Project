@@ -163,7 +163,7 @@ class FaceRecognitionTab(QWidget):
         self.display_image(frame, self.camera_viewfinder)
         
     def delay_recog(self):
-        QTimer.singleShot(5000, self.open_recog) #khoan, chờ khoảng chừng là 5s
+        QTimer.singleShot(15000, self.open_recog) #khoan, chờ khoảng chừng là 15s
         
     def open_recog(self):
         self.loading_recog= False # ok tiếp tục đi

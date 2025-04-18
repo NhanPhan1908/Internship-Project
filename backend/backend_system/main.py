@@ -147,7 +147,7 @@ async def recognize(file: UploadFile = File(...)):
         "employee_id": employee_id,
         "name": name,
         "confidence": confidence,
-        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "time": datetime.now(),
         "status": "checkin"
     }
     attendance_collection.insert_one(new_attendance)
@@ -155,7 +155,7 @@ async def recognize(file: UploadFile = File(...)):
     new_checkin = {
         "employee_id": employee_id,
         "name": name,
-        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "time": datetime.now(),
         "late_time": get_late_minute()
     }
     checkin_collection.insert_one(new_checkin)
